@@ -33,7 +33,7 @@ Changing the service tier or compute size of mainly involves the service perform
 
 ## ASDAS Recommended Settings
 
-For this reasons my suggestion is to use this tool just for the following arrays:
+For this reasons my suggestion is to use this tool just for the following ranges:
 
 - **Basic/S0-S2**
 - **S3-S12**
@@ -47,5 +47,6 @@ For this reasons my suggestion is to use this tool just for the following arrays
 - 
 
 ## References
+ - [Resource limits for single databases using the DTU purchasing model - Azure SQL Database](https://docs.microsoft.com/en-us/azure/azure-sql/database/resource-limits-dtu-single-databases#single-database-storage-sizes-and-compute-sizes)
  - [Some examples to how achieve Retry-Logic Access to Azure SQL DB](https://docs.microsoft.com/en-us/azure/azure-sql/database/troubleshoot-common-connectivity-issues)
  - [Handling Application Connections during Database Changes](https://docs.microsoft.com/en-us/previous-versions/azure/dn369872(v=azure.100)?redirectedfrom=MSDN#handling-application-connections-during-database-changes)

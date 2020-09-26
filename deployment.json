@@ -1,0 +1,339 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        // Parameters: Action Group
+        "actionGroupName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Provide an action group name that is unique within the resource group."
+            }
+        },
+        "actionGroupShortName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12,
+            "metadata": {
+                "description": "Short Name of the Action group (12 chars max)"
+            }
+        },
+        "storageAccountName": {
+            "type": "string",
+            "metadata": {
+                "description": "Storage Account where the Function App will be deployed"
+            }
+        },
+        // Parameters: Function App
+        "hostingPlanName": {
+            "type": "string",
+            "metadata": {
+                "description": "Hosting Plan name for the Function App"
+            }
+        },
+        // Parameters: SQL Server and DB
+        "sqlServerName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the SQL Server"
+            }
+        },
+        "sqlDBName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the SQL database"
+            }
+        },
+        "sqlAdministratorLogin": {
+            "type": "string",
+            "metadata": {
+                "description": "The administrator username of the SQL logical server."
+            }
+        },
+        "sqlAdministratorLoginPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The administrator password of the SQL logical server."
+            }
+        },
+        "startingSkuTier": {
+            "type": "array",
+            "metadata": {
+                "description": "Starting SKU Tier of the SQL database, min and max allowed Autiscaling SKUs, SKU tier"
+            },
+            "defaultValue": ["S3","S3","S12","Standard"],
+            "allowedValues": [
+                ["Basic","Basic","S2","Basic"],
+                ["S0","S0","S2","Standard"],
+                ["S1","S0","S2","Standard"],
+                ["S2","S0","S2","Standard"],
+                ["S3","S3","S12","Standard"],
+                ["S4","S3","S12","Standard"],
+                ["S5","S3","S12","Standard"],
+                ["S6","S3","S12","Standard"],
+                ["S7","S3","S12","Standard"],
+                ["S9","S3","S12","Standard"],
+                ["S12","S3","S12","Standard"],
+                ["P1","P1","P15","Premium"],
+                ["P2","P1","P15","Premium"],
+                ["P4","P1","P15","Premium"],
+                ["P6","P1","P15","Premium"],
+                ["P11","P1","P15","Premium"],
+                ["P15","P1","P15","Premium"]
+            ]
+        }
+
+    },
+    "functions": [],
+    "variables": {
+        "functionname": "[concat('asdas-',parameters('sqlServerName'), '-',parameters('sqlDBName'))]",
+        "metricdescriptionup": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for UPSCALING ', parameters('sqlDBName'))]",
+        "metricdescriptiondown": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for DOWNSCALING ', parameters('sqlDBName'))]",
+        "alertnameup": "[concat(parameters('sqlDBName'),' - upscaling alert')]",
+        "alertnamedown": "[concat(parameters('sqlDBName'),' - downscaling alert')]",
+        "databaseCollation": "SQL_Latin1_General_CP1_CI_AS",
+        "transparentDataEncryption": "Enabled",
+        "deploySkuTier": "[parameters('startingSkuTier')[0]]",
+        "minimumSkuTier": "[parameters('startingSkuTier')[1]]",
+        "maximumSkuTier": "[parameters('startingSkuTier')[2]]",
+        "skuTierFamily": "[parameters('startingSkuTier')[3]]"
+    },
+    "resources": [
+        { //Resource: Action Group
+            "name": "[parameters('actionGroupName')]",
+            "type": "Microsoft.Insights/actionGroups",
+            "apiVersion": "2018-03-01",
+            "location": "Global",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionname'))]"
+            ],
+            "properties": {
+                "groupShortName": "[parameters('actionGroupShortName')]",
+                "enabled": true
+            }
+        },
+
+        { //Resource: Metric Alert UPSCALING
+            "name": "[variables('alertnameup')]",
+            "type": "Microsoft.Insights/metricAlerts",
+            "location": "Global",
+            "apiVersion": "2018-03-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups',parameters('actionGroupName'))]",
+                "[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"
+            ],
+            "tags": {},
+            "properties": {
+                "description": "[variables('metricdescriptionup')]",
+                "severity": 3,
+                "enabled": true,
+                "scopes": ["[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"],
+                "evaluationFrequency":"PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                    "allOf": [
+                        {
+                            "criterionType": "StaticThresholdCriterion",
+                            "name" : "ASDAS DTU Consumption UP",
+                            "metricName": "dtu_consumption_percent",
+                            "dimensions":[],
+                            "operator": "GreaterThanOrEqual",
+                            "threshold" : 90,
+                            "timeAggregation": "Average"
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups',parameters('actionGroupName'))]"
+                    }
+                ]
+            }
+        },
+            { //Resource: Metric Alert DOWNSCALING
+            "name": "[variables('alertnamedown')]",
+            "type": "Microsoft.Insights/metricAlerts",
+            "location": "Global",
+            "apiVersion": "2018-03-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups',parameters('actionGroupName'))]",
+                "[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"
+            ],
+            "tags": {},
+            "properties": {
+                "description": "[variables('metricdescriptiondown')]",
+                "severity": 3,
+                "enabled": true,
+                "scopes": ["[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"],
+                "evaluationFrequency":"PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                    "allOf": [
+                        {
+                            "criterionType": "StaticThresholdCriterion",
+                            "name" : "ASDAS DTU Consumption DOWN",
+                            "metricName": "dtu_consumption_percent",
+                            "dimensions":[],
+                            "operator": "LessThanOrEqual",
+                            "threshold" : 20,
+                            "timeAggregation": "Average"
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups',parameters('actionGroupName'))]"
+                    }
+                ]
+            }
+        },
+        { // Resource: Storage account
+            "name": "[parameters('storageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "tags": {
+                "displayName": "[parameters('storageAccountName')]"
+            },
+            "location": "[resourceGroup().location]",
+            "kind": "StorageV2",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "supportsHttpsTrafficOnly": true
+            }
+        },
+        { // Resource: Hosting Plan for Function App
+            "name": "[parameters('hostingPlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2019-08-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+            ],
+            "properties": {
+                "name": "[parameters('hostingPlanName')]",
+                "computeMode": "Dynamic"
+            },
+            "sku": {
+                "tier": "Dynamic",
+                "name": "Y1",
+                "family": "Y",
+                "capacity": 0
+            }
+        },
+        { // Resource: Function App
+            "apiVersion": "2018-11-01",
+            "name": "[variables('functionname')]",
+            "type": "Microsoft.Web/sites",
+            "kind": "functionapp",
+            "location": "[resourceGroup().location]",
+            "tags": {},
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                "[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"
+            ],
+            "properties": {
+                "name": "[variables('functionname')]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~3"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "powershell"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value,';EndpointSuffix=','core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value,';EndpointSuffix=','core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('functionname'))]"
+                        }
+                    ],
+                    "powerShellVersion": "~7"
+                },
+                "serverFarmId": "[concat('Microsoft.Web/serverfarms/', parameters('hostingPlanName'))]",
+                "clientAffinityEnabled": true
+            }
+        },
+
+        // To be Fixed!
+
+        {   // Resource: SQL Server and SQL DB
+            "name": "[parameters('sqlServerName')]",
+            "type": "Microsoft.Sql/servers",
+            "apiVersion": "2020-02-02-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "administratorLogin": "[parameters('sqlAdministratorLogin')]",
+                "administratorLoginPassword": "[parameters('sqlAdministratorLoginPassword')]"
+            },
+            "resources": [
+                {
+                    "name": "[parameters('sqlDBName')]",
+                    "type": "databases",
+                    "apiVersion": "2020-02-02-preview",
+                    "location": "[resourceGroup().location]",
+                    "tags": {
+                        "ASDAS": "Enabled"
+                    },
+                    "dependsOn": [
+                        "[parameters('sqlServerName')]"
+                    ],
+                    "properties": {
+                        "collation": "[variables('databaseCollation')]"
+                    },
+                    "sku": {
+                        "name": "[variables('deploySkuTier')]",
+                        "tier": "[variables('skuTierFamily')]"
+                    },
+                    "resources": [
+                        {
+                            "comments": "Transparent Data Encryption",
+                            "name": "current",
+                            "type": "transparentDataEncryption",
+                            "apiVersion": "2017-03-01-preview",
+                            "dependsOn": [
+                                "[parameters('sqlDBName')]"
+                            ],
+                            "properties": {
+                                "status": "[variables('transparentDataEncryption')]"
+                            }
+                        }  
+                    ]
+                },
+                {
+                    "name": "AllowAllMicrosoftAzureIps",
+                    "type": "firewallrules",
+                    "apiVersion": "2020-02-02-preview",
+                    "location": "[resourceGroup().location]",
+                    "properties": {
+                        "endIpAddress": "0.0.0.0",
+                        "startIpAddress": "0.0.0.0"
+                    },
+                    "dependsOn": [
+                        "[parameters('sqlServerName')]"
+                    ]
+                }
+            ]
+        }
+    ],
+    "outputs": {
+        "storageAccountId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+        }
+    }
+}
