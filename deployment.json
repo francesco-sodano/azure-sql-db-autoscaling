@@ -209,20 +209,20 @@
         { // Resource: Hosting Plan for Function App
             "name": "[parameters('hostingPlanName')]",
             "type": "Microsoft.Web/serverfarms",
-            "apiVersion": "2019-08-01",
+            "apiVersion": "2018-11-01",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
             ],
             "properties": {
                 "name": "[parameters('hostingPlanName')]",
-                "computeMode": "Dynamic"
+                "workerSize": "0",
+                "workerSizeId": "0",
+                "numberOfWorkers": "1"
             },
             "sku": {
                 "tier": "Dynamic",
-                "name": "Y1",
-                "family": "Y",
-                "capacity": 0
+                "name": "Y1"
             }
         },
         { // Resource: Function App
@@ -231,7 +231,6 @@
             "type": "Microsoft.Web/sites",
             "kind": "functionapp",
             "location": "[resourceGroup().location]",
-            "tags": {},
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', parameters('hostingPlanName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
@@ -264,7 +263,7 @@
                     ],
                     "powerShellVersion": "~7"
                 },
-                "serverFarmId": "[concat('Microsoft.Web/serverfarms/', parameters('hostingPlanName'))]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('hostingPlanName'))]",
                 "clientAffinityEnabled": true
             }
         },
