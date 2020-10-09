@@ -11,15 +11,6 @@
         "storageAccountName": {
             "value": "stasdas"
         },
-        "hostingPlanName": {
-            "value": "ASDASHostingPlan"
-        },
-        "actionGroupName": {
-            "value": "ASDAS Action Group"
-        },
-        "actionGroupShortName": {
-            "value": "ASDAS"
-        },
         "sqlAdministratorLogin": {
             "value": "fsodano"
         },
