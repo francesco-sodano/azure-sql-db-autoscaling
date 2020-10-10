@@ -6,7 +6,7 @@
         "storageAccountName": {
             "type": "string",
             "metadata": {
-                "description": "Storage Account where the Function App will be deployed"
+                "description": "Storage Account where the Azure Function will be deployed"
             }
         },
         // Parameters: SQL Server and DB
@@ -37,7 +37,7 @@
         "startingSkuTier": {
             "type": "array",
             "metadata": {
-                "description": "Starting tier of the SQL database, min and max allowed Autiscaling tiers"
+                "description": "Starting tier of the SQL database, minimum tier, maximum tier, tier family."
             },
             "defaultValue": ["Basic","Basic","S2","Basic"],
             "allowedValues": [
