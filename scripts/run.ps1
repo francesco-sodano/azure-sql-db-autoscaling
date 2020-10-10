@@ -1,36 +1,72 @@
 using namespace System.Net
 using namespace System.Array
 
-# Input bindings are passed in via param block.
+# Input bindings and module import.
 param($Request, $TriggerMetadata)
 Import-Module az.sql
 
-# List of available SQL SKU for DTU
-$sqlSkus = @('Basic','S0','S1','S2','S3','S4','S5','S6','S7','S9','S12','P1','P2','P4','P6','P11','P15')
+# Function RequestAnswer: Support for sending answer back to the requester and write logs.
+function Send-Answer {
+    param (
+        [string]$Answer,
+        [bool]$WriteHost
+    )
+    process {
+        if($WriteHost){
+            Write-Host $answer
+        }
+        Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+            StatusCode = [HttpStatusCode]::OK
+            Body = $answer
+        })
+    }
+}
 
-# Checking parameters.
+# List of available SQL Tiers for DTU
+$sqlSkus = @("Basic","S0","S1","S2","S3","S4","S5","S6","S7","S9","S12","P1","P2","P4","P6","P11","P15")
+
+# Checking Environment variables
+$resourceGroupName = $env:RESOURCEGROUP
+$serverName = $env:SQLSERVERNAME
+$databaseName = $env:SQLDBNAME
+$maxsku = $env:MAXIMUMSKU
+$minsku = $env:MINIMUMSKU
+if ((!$resourceGroupName) -or (!$serverName) -or (!$databaseName) -or (!$maxsku) -or (!$minsku)){
+    Send-Answer -Answer "ASDAS - Critical Alert: Missing one or more environment variables in the Function App - No Action" -WriteHost $true
+    exit 1
+}
+
+# Checking Request variables (Azure Common Alert Schema)
 $metricDTU = [int]$Request.Body.data.alertContext.condition.allOf.metricValue
 $threshold = $Request.Body.data.alertContext.condition.allOf.operator
 $alertCondition = $Request.Body.data.essentials.monitorCondition
-$currentSku = (Get-AzSqlDatabase -ResourceGroupName $env:RESOURCEGROUP -ServerName $env:SQLSERVERNAME -DatabaseName $env:SQLDBNAME).currentServiceObjectiveName
-$scalingSku = (Get-AzSqlDatabase -ResourceGroupName $env:RESOURCEGROUP -ServerName $env:SQLSERVERNAME -DatabaseName $env:SQLDBNAME).RequestedServiceObjectiveName
-$indexSku = [array]::indexof($sqlSkus,$currentSku)
-$indexMaxSku = [array]::indexof($sqlSkus,$env:MAXIMUMSKU)
-$indexMinSku = [array]::indexof($sqlSkus,$env:MINIMUMSKU)
-Write-Host "DB: $env:SQLDBNAME - CurrentServiceServiceObject: $currentSku - RequestedServiceObject: $scalingSku - DTU: $metricDTU - Operator: $threshold - Condition: $alertCondition"
+if ((!$metricDTU) -or (!$threshold) -or (!$alertCondition)){
+    Send-Answer -Answer "ASDAS - Wrong request - No Action" -WriteHost $true
+    exit 1
+}
 
-# Checking if the DB is already in scaling (exit if already scaling or the alert is resolved)
+# Checking Database current status
+$database = Get-AzSqlDatabase -ResourceGroupName $resourceGroupName -ServerName $serverName -databaseName $DatabaseName
+if(!$database){
+    Send-Answer -Answer "ASDAS - Database, Server or Resource Group does not exist - No Action" - Write-Host $true
+    exit 1
+}
+else {
+    $currentSku = $databaseName.currentServiceObjectiveName
+    $scalingSku = $database.RequestedServiceObjectiveName
+    $indexSku = [array]::indexof($sqlSkus,$currentSku)
+    $indexMaxSku = [array]::indexof($sqlSkus,$maxsku)
+    $indexMinSku = [array]::indexof($sqlSkus,$minsku)
+    Write-Host "ASDAS - DB: $DatabaseName - CurrentTier: $currentSku - ScalingTier: $scalingSku - DTU: $metricDTU - Operator: $threshold - Alert Condition: $alertCondition"
+}
+
+# Checking if the DB is already in scaling or the alert is resolved.
 if (($currentSku -ne $scalingSku) -or ($alertCondition -ne "Fired")) {
-    $body = "DB: $env:SQLDBNAME - Scaling Already in progress or Alert Resolved - Current SKU: $currentSku"
-    Write-Host $body
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-        StatusCode = [HttpStatusCode]::OK
-        Body = $body
-    })
+    Send-Answer -answer "ASDAS - DB: $DatabaseName - Scaling Already in progress or Alert Resolved - Current SKU: $currentSku" -WriteHost $true
     exit 0
 }
 
-# Scale actions
+# Scale Actions
 try {
     
     #Scale UP Action.
@@ -38,13 +74,13 @@ try {
         if($indexSku -lt $indexMaxSku) {
             $targetsku = $sqlSkus[$indexSku+1]
             # Scale SQL Database UP.
-            Set-AzSqlDatabase -ResourceGroupName $env:RESOURCEGROUP -ServerName $env:SQLSERVERNAME -DatabaseName $env:SQLDBNAME -RequestedServiceObjectiveName $targetsku
-            $body = "DB: $env:SQLDBNAME - Action required: Scale UP - Previous SKU: $currentSku, New SKU: $targetsku - DTU: $metricDTU"
+            Set-AzSqlDatabase -ResourceGroupName $resourceGroupName -ServerName $serverName -DatabaseName $databaseName -RequestedServiceObjectiveName $targetsku
+            $body = "ASDAS - DB: $DatabaseName - Action required: Scale UP - Previous SKU: $currentSku, New SKU: $targetsku - DTU: $metricDTU"
             Write-Host $body
         }
         else {
             # Maximum SQL SKU reached.
-            $body = "DB: $env:SQLDBNAME - Action required: Scale UP - Maximum SKU reached - DTU: $metricDTU"
+            $body = "ASDAS - DB: $DatabaseName - Action required: Scale UP - Maximum SKU reached - DTU: $metricDTU"
             Write-Host $body
         }
     }
@@ -54,29 +90,21 @@ try {
         if($indexSku -gt $indexMinSku) {
             $targetsku = $sqlSkus[$indexSku-1]
             # Scale SQL Database DOWN.
-            Set-AzSqlDatabase -ResourceGroupName $env:RESOURCEGROUP -ServerName $env:SQLSERVERNAME -DatabaseName $env:SQLDBNAME -RequestedServiceObjectiveName $targetsku
-            $body = "DB: $env:SQLDBNAME - Action required: Scale DOWN - Previous SKU: $currentSku, New SKU: $targetsku - DTU: $metricDTU"
+            Set-AzSqlDatabase -ResourceGroupName $resourceGroupName -ServerName $serverName -databaseName $DatabaseName -RequestedServiceObjectiveName $targetsku
+            $body = "ASDAS - DB: $DatabaseName - Action required: Scale DOWN - Previous SKU: $currentSku, New SKU: $targetsku - DTU: $metricDTU"
             Write-Host $body
         }
         else {
-            #Minimum SKU reached.
-            $body = "DB: $env:SQLDBNAME - Action required: Scale DOWN - Minimum SKU reached - DTU: $metricDTU"
+            # Minimum SKU reached.
+            $body = "ASDAS - DB: $DatabaseName - Action required: Scale DOWN - Minimum SKU reached - DTU: $metricDTU"
             Write-Host $body
         }
     }
 }
 catch {
-    $body = "DB: $env:SQLDBNAME - Error Scaling the DB - please refer to the Function App log for additional information"
-    Write-Host $body
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-        StatusCode = [HttpStatusCode]::BadRequest
-        Body = $body
-    })
+    Send-Answer -Answer "ASDAS - DB: $DatabaseName - Error Scaling the DB - please refer to the Function App log for additional information" -WriteHost $true
     exit 1
 }
 
-# Associate values to output bindings by calling 'Push-OutputBinding'.
-Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-    StatusCode = [HttpStatusCode]::OK
-    Body = $body
-})
+# Send Response.
+Send-Answer -Answer $body -WriteHost $false

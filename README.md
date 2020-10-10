@@ -84,13 +84,13 @@ the list is the following:
 
 ## ASDAS Defaults and Recommended Settings
 
-ASDAS includes a set parameters already pre-defined **to reduce at the minimum possible the impact of the Azure Database tier scale**. You can change these default values (editing the azuredeploy.json - you should evaluate carefully the impact) but they are not defined as standard ARM Temaplte parameters.
+ASDAS includes a set parameters already pre-defined **to reduce at the minimum the impact of the Azure Database tier scale**. You can change these default values (editing the *azuredeploy.json* - you should evaluate carefully the impact) but they are not defined as standard ARM Template parameters.
 
-**Action Group** name and short Name are pre-defined as they can be reused by multiple instances of ASDAS
+**Action Group** name and short name are pre-defined as they can be reused by multiple instances of ASDAS.
 
-**Hosting Plan** name is pre-defined as it can be reused by multiple instances of ASDAS
+**Hosting Plan** name is pre-defined as it can be reused by multiple instances of ASDAS.
 
-**Alerts** are sent using the [Common Alert Schema](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-common-schema)
+**Alerts** are sent using the [Common Alert Schema](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-common-schema).
 
 **Metrics** are using the following values:
 
@@ -101,6 +101,7 @@ ASDAS includes a set parameters already pre-defined **to reduce at the minimum p
   - Operator: GreaterThanOrEqual
   - Aggragation: Average
   - Threshold: 90
+  - Severity: 1
 
 - Scale DOWN
   - Metric: DTU Consumption Percent
@@ -109,6 +110,7 @@ ASDAS includes a set parameters already pre-defined **to reduce at the minimum p
   - Operator: LessThanOrEqual
   - Aggragation: Average
   - Threshold: 20
+  - Severity: 2
 
 **Scaling function** only operate with this pre-configured database tiers/storage ranges:
 
@@ -119,11 +121,14 @@ ASDAS includes a set parameters already pre-defined **to reduce at the minimum p
 
 ## ASDAS Deployment
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffrancesco-sodano%2Fazure-sql-db-autoscaling%2Fvnext%2Fazuredeploy.json)
+
 ## ASDAS Limitation and Known Issues
 
 - ASDAS is not supporting Geo-Replicated Azure SQL DBs.
 - ASDAS is not supporting the database max size scaling even if included in the costs (be careful with the Basic/S0-S2 range as S0-S2 includes 250Gb Storage and Basic only 2Gb).
 - ASDAS is not implementing any backup strategy in the template.
+- ASDAS Function App is running in anonymous mode as Azure Monitor (Action Group) is not able to send authenticated requests.  
 
 ## References
 
