@@ -47,7 +47,7 @@ the following Azure artifacts are deployed with the ARM Template:
 - App Insights component for Function App Logs
 - Role Assignment for Function App identity (System Assigned) as 'SQL DB Contributor Role' at resource group scope.
 
-![ASDAS Reference Architecture](/images/referenceArchitecture.jpg)
+![ASDAS Reference Architecture](/images/ReferenceArchitecture.JPG)
 
 *Note: Resource dependencies are not reflected correctly in this image.*
 
