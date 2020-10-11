@@ -11,8 +11,8 @@
     ],
     "outputs": {
         "functionAppId": {
-            "type": "object",
-            "value": "[listKeys(resourceId('Microsoft.Web/sites/functions', parameters('functionApp'), variables('functionAppName')),'2018-11-01')]"
+            "type": "string",
+            "value": "[listKeys(resourceId('Microsoft.Web/sites/functions', parameters('functionApp'), variables('functionAppName')),'2018-11-01').default]"
         }//,
         //"functionkeys": {
         //    "type": "object",
