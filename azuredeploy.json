@@ -67,10 +67,11 @@
         "actionGroupName": "ASDAS Action Group",
         "actionGroupShortName": "ASDAS",
         "hostingPlanName": "ASDASHostingPlan",
-        "functionname": "[concat('asdas-',parameters('sqlServerName'), '-',parameters('sqlDBName'))]",
+        "functionAppName": "asdas-scaling",
+        "functionName": "[concat('asdas-',parameters('sqlServerName'), '-',parameters('sqlDBName'))]",
         "appInsightsServiceName": "[concat('appi-', parameters('sqlServerName'))]",
-        "metricdescriptionup": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for UPSCALING ', parameters('sqlDBName'))]",
-        "metricdescriptiondown": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for DOWNSCALING ', parameters('sqlDBName'))]",
+        "metricDescriptionUp": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for UPSCALING ', parameters('sqlDBName'))]",
+        "metricDescriptionDown": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for DOWNSCALING ', parameters('sqlDBName'))]",
         "alertnameup": "[concat(parameters('sqlDBName'),' - upscaling alert')]",
         "alertnamedown": "[concat(parameters('sqlDBName'),' - downscaling alert')]",
         "databaseCollation": "SQL_Latin1_General_CP1_CI_AS",
@@ -89,11 +90,22 @@
             "apiVersion": "2018-03-01",
             "location": "Global",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', variables('functionname'))]"
+                "[resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName'))]"
             ],
             "properties": {
                 "groupShortName": "[variables('actionGroupShortName')]",
-                "enabled": true
+                "enabled": true,
+                "azureFunctionReceivers": [
+                    {
+                        "name": "[variables('functionAppName')]",
+                        "functionAppResourceId": "[resourceId('Microsoft.Web/sites', variables('functionName'))]",
+                        "functionName": "[variables('functionAppName')]",
+                        "httpTriggerUrl": "string",
+                        "useCommonAlertSchema": true
+                        // "[listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').functionKeys.default]"
+                        // "[listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').trigger_url]"
+                    }
+                ]
             }
         },
 
@@ -208,7 +220,7 @@
             }
         },
         {   // Resource: Function App and Code
-            "name": "[variables('functionname')]",
+            "name": "[variables('functionName')]",
             "type": "Microsoft.Web/sites",
             "apiVersion": "2018-11-01",
             "kind": "functionapp",
@@ -222,7 +234,7 @@
                 "[resourceId('microsoft.insights/components', variables('appInsightsServiceName'))]"
             ],
             "properties": {
-                "name": "[variables('functionname')]",
+                "name": "[variables('functionName')]",
                 "siteConfig": {
                     "appSettings": [
                         {
@@ -243,7 +255,7 @@
                         },
                         {
                             "name": "WEBSITE_CONTENTSHARE",
-                            "value": "[toLower(variables('functionname'))]"
+                            "value": "[toLower(variables('functionName'))]"
                         },
                         {
                             "name": "MAXIMUMSKU",
@@ -281,12 +293,12 @@
             }
         },
         {
-            "name": "[concat(variables('functionname'), '/asdas-scaling')]",
+            "name": "[concat(variables('functionName'), '/', variables('functionAppName'))]",
             "type": "Microsoft.Web/sites/functions",
             "apiVersion": "2018-11-01",
             "location": "West Europe",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', variables('functionname'))]"
+                "[resourceId('Microsoft.Web/sites', variables('functionName'))]"
             ],
             "properties": {
                 "config": {
@@ -389,11 +401,11 @@
             "apiVersion": "2020-04-01-preview",
             "properties": {
                 "roleDefinitionId": "[variables('sqlDBContributorRole')]",
-                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionname')),'2018-11-01', 'full').identity.principalId]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionName')),'2018-11-01', 'full').identity.principalId]",
                 "scope": "[resourceGroup().id]"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', variables('functionname'))]"
+                "[resourceId('Microsoft.Web/sites', variables('functionName'))]"
             ]
         }
     ],
