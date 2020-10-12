@@ -132,7 +132,7 @@ Or you can run the Azure CLI script provided in the scripts fodler of the projec
 - ASDAS is not supporting Geo-Replicated Azure SQL DBs.
 - ASDAS is not supporting the database max size scaling even if included in the costs (be careful with the Basic/S0-S2 range as S0-S2 includes 250Gb Storage and Basic only 2Gb).
 - ASDAS is not implementing any backup strategy in the template.
-- ASDAS Function App is running in anonymous mode as Azure Monitor (Action Group) is not able to send authenticated requests.  
+- ASDAS is generating a deployment error if you deploy a second DB in the same resource group and SQL Server. The reason is the role assigment to the resoruce group that cannot be updated. we are working on a fix for this.
 
 ## References
 
