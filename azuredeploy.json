@@ -1,9 +1,413 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "parameters": {},
+    "parameters": {
+        // Parameters: Storage Account for Function App
+        "storageAccountName": {
+            "type": "string",
+            "metadata": {
+                "description": "Storage Account where the Azure Function will be deployed"
+            }
+        },
+        // Parameters: SQL Server and DB
+        "sqlServerName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the SQL Server"
+            }
+        },
+        "sqlDBName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the SQL database"
+            }
+        },
+        "sqlAdministratorLogin": {
+            "type": "string",
+            "metadata": {
+                "description": "The administrator username of the SQL logical server."
+            }
+        },
+        "sqlAdministratorLoginPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The administrator password of the SQL logical server."
+            }
+        },
+        "startingSkuTier": {
+            "type": "array",
+            "metadata": {
+                "description": "Starting tier of the SQL database, minimum tier, maximum tier, tier family."
+            },
+            "defaultValue": ["Basic","Basic","S2","Basic"],
+            "allowedValues": [
+                ["Basic","Basic","S2","Basic"],
+                ["S0","S0","S2","Standard"],
+                ["S1","S0","S2","Standard"],
+                ["S2","S0","S2","Standard"],
+                ["S3","S3","S12","Standard"],
+                ["S4","S3","S12","Standard"],
+                ["S5","S3","S12","Standard"],
+                ["S6","S3","S12","Standard"],
+                ["S7","S3","S12","Standard"],
+                ["S9","S3","S12","Standard"],
+                ["S12","S3","S12","Standard"],
+                ["P1","P1","P6","Premium"],
+                ["P2","P1","P6","Premium"],
+                ["P4","P1","P6","Premium"],
+                ["P6","P1","P6","Premium"],
+                ["P11","P11","P15","Premium"],
+                ["P15","P11","P15","Premium"]
+            ]
+        }
+
+    },
     "functions": [],
-    "variables": {},
-    "resources": [],
+    "variables": {
+        "actionGroupName": "ASDAS Action Group",
+        "actionGroupShortName": "ASDAS",
+        "hostingPlanName": "ASDASHostingPlan",
+        "functionAppName": "asdas-scaling",
+        "functionName": "[concat('asdas-',parameters('sqlServerName'), '-',parameters('sqlDBName'))]",
+        "functionAppURL": "[concat('https://', variables('functionName'),'.azurewebsites.net/api/', variables('functionAppName'),'?code=')]",
+        "appInsightsServiceName": "[concat('appi-', parameters('sqlServerName'))]",
+        "metricDescriptionUp": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for UPSCALING ', parameters('sqlDBName'))]",
+        "metricDescriptionDown": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for DOWNSCALING ', parameters('sqlDBName'))]",
+        "alertnameup": "[concat(parameters('sqlDBName'),' - upscaling alert')]",
+        "alertnamedown": "[concat(parameters('sqlDBName'),' - downscaling alert')]",
+        "databaseCollation": "SQL_Latin1_General_CP1_CI_AS",
+        "transparentDataEncryption": "Enabled",
+        "roleAssignementName": "[guid(uniqueString(parameters('sqlServerName')))]",
+        "sqlDBContributorRole": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '9b7fa17d-e63e-47b0-bb0a-15c516ac86ec')]",
+        "deploySkuTier": "[parameters('startingSkuTier')[0]]",
+        "minimumSkuTier": "[parameters('startingSkuTier')[1]]",
+        "maximumSkuTier": "[parameters('startingSkuTier')[2]]",
+        "skuTierFamily": "[parameters('startingSkuTier')[3]]"
+    },
+    "resources": [
+        { //Resource: Action Group
+            "name": "[variables('actionGroupName')]",
+            "type": "Microsoft.Insights/actionGroups",
+            "apiVersion": "2018-03-01",
+            "location": "Global",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName'))]"
+            ],
+            "properties": {
+                "groupShortName": "[variables('actionGroupShortName')]",
+                "enabled": true,
+                "azureFunctionReceivers": [
+                    {
+                        "name": "[variables('functionAppName')]",
+                        "functionAppResourceId": "[resourceId('Microsoft.Web/sites', variables('functionName'))]",
+                        "functionName": "[variables('functionAppName')]",
+                        "httpTriggerUrl": "[concat(variables('functionAppURL'), listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').default)]",
+                        "useCommonAlertSchema": true
+                        // "[listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').default]"
+                    }
+                ]
+            }
+        },
+
+        { //Resource: Metric Alert UPSCALING
+            "name": "[variables('alertnameup')]",
+            "type": "Microsoft.Insights/metricAlerts",
+            "location": "Global",
+            "apiVersion": "2018-03-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups',variables('actionGroupName'))]",
+                "[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"
+            ],
+            "properties": {
+                "description": "[variables('metricdescriptionup')]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": ["[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"],
+                "evaluationFrequency":"PT5M",
+                "windowSize": "PT5M",
+                "criteria": {
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                    "allOf": [
+                        {
+                            "criterionType": "StaticThresholdCriterion",
+                            "name" : "ASDAS DTU Consumption UP",
+                            "metricName": "dtu_consumption_percent",
+                            "dimensions":[],
+                            "operator": "GreaterThanOrEqual",
+                            "threshold" : 90,
+                            "timeAggregation": "Average"
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups',variables('actionGroupName'))]"
+                    }
+                ]
+            }
+        },
+        {   //Resource: Metric Alert DOWNSCALING
+            "name": "[variables('alertnamedown')]",
+            "type": "Microsoft.Insights/metricAlerts",
+            "apiVersion": "2018-03-01",
+            "location": "Global",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups',variables('actionGroupName'))]",
+                "[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"
+            ],
+            "properties": {
+                "description": "[variables('metricdescriptiondown')]",
+                "severity": 2,
+                "enabled": true,
+                "scopes": ["[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]"],
+                "evaluationFrequency":"PT5M",
+                "windowSize": "PT5M",
+                "criteria": {
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                    "allOf": [
+                        {
+                            "criterionType": "StaticThresholdCriterion",
+                            "name" : "ASDAS DTU Consumption DOWN",
+                            "metricName": "dtu_consumption_percent",
+                            "dimensions":[],
+                            "operator": "LessThanOrEqual",
+                            "threshold" : 20,
+                            "timeAggregation": "Average"
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups',variables('actionGroupName'))]"
+                    }
+                ]
+            }
+        },
+        {   // Resource: Storage account
+            "name": "[parameters('storageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "kind": "StorageV2",
+            "tags": {
+                "displayName": "[parameters('storageAccountName')]"
+            },
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "supportsHttpsTrafficOnly": true
+            }
+        },
+        {   // Resource: Hosting Plan for Function App
+            "name": "[variables('hostingPlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2018-11-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+            ],
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "workerSize": "0",
+                "workerSizeId": "0",
+                "numberOfWorkers": "1"
+            },
+            "sku": {
+                "tier": "Dynamic",
+                "name": "Y1"
+            }
+        },
+        {   // Resource: Function App and Code
+            "name": "[variables('functionName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "kind": "functionapp",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Sql/servers/databases',parameters('sqlServerName'),parameters('sqlDBName'))]",
+                "[resourceId('microsoft.insights/components', variables('appInsightsServiceName'))]"
+            ],
+            "properties": {
+                "name": "[variables('functionName')]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~3"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "powershell"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value,';EndpointSuffix=','core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value,';EndpointSuffix=','core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('functionName'))]"
+                        },
+                        {
+                            "name": "MAXIMUMSKU",
+                            "value": "[variables('maximumSkuTier')]"
+                        },
+                        {
+                            "name": "MINIMUMSKU",
+                            "value": "[variables('minimumSkuTier')]"
+                        },
+                        {
+                            "name": "RESOURCEGROUP",
+                            "value": "[resourceGroup().name]"
+                        },
+                        {
+                            "name": "SQLDBNAME",
+                            "value": "[parameters('sqlDBName')]"
+                        },
+                        {
+                            "name": "SQLSERVERNAME",
+                            "value": "[parameters('sqlServerName')]"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('appInsightsServiceName')), '2020-02-02-preview').InstrumentationKey]"
+                        }
+                    ],
+                    "powerShellVersion": "~7",
+                    "http20Enabled": true,
+                    "minTlsVersion": "1.2",
+                    "ftpsState": "Disabled"
+                },
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "clientAffinityEnabled": true,
+                "httsOnly": true
+            }
+        },
+        {
+            "name": "[concat(variables('functionName'), '/', variables('functionAppName'))]",
+            "type": "Microsoft.Web/sites/functions",
+            "apiVersion": "2018-11-01",
+            "location": "West Europe",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionName'))]"
+            ],
+            "properties": {
+                "config": {
+                    "bindings": [
+                        {
+                            "authLevel": "function",
+                            "type": "httpTrigger",
+                            "direction": "in",
+                            "name": "Request",
+                            "methods": [
+                                "get",
+                                "post"
+                            ]
+                        },
+                        {
+                            "type": "http",
+                            "direction": "out",
+                            "name": "Response"
+                        }
+                    ],
+                    "disabled": false
+                },
+                "files": {
+                    "run.ps1": "using namespace System.Net\nusing namespace System.Array\n\n# Input bindings and module import.\nparam($Request, $TriggerMetadata)\nImport-Module az.sql\n\n# Function RequestAnswer: Support for sending answer back to the requester and write logs.\nfunction Send-Answer {\n    param (\n        [string]$Answer,\n        [bool]$WriteHost\n    )\n    process {\n        if($WriteHost){\n            Write-Host $answer\n        }\n        Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{\n            StatusCode = [HttpStatusCode]::OK\n            Body = $answer\n        })\n    }\n}\n\n# List of available SQL Tiers for DTU\n$sqlSkus = @(\"Basic\",\"S0\",\"S1\",\"S2\",\"S3\",\"S4\",\"S5\",\"S6\",\"S7\",\"S9\",\"S12\",\"P1\",\"P2\",\"P4\",\"P6\",\"P11\",\"P15\")\n\n# Checking Environment variables\n$resourceGroupName = $env:RESOURCEGROUP\n$serverName = $env:SQLSERVERNAME\n$databaseName = $env:SQLDBNAME\n$maxsku = $env:MAXIMUMSKU\n$minsku = $env:MINIMUMSKU\nif ((!$resourceGroupName) -or (!$serverName) -or (!$databaseName) -or (!$maxsku) -or (!$minsku)){\n    Send-Answer -Answer \"ASDAS - Critical Alert: Missing one or more environment variables in the Function App - No Action\" -WriteHost $true\n    exit 1\n}\n\n# Checking Request variables (Azure Common Alert Schema)\n$metricDTU = [int]$Request.Body.data.alertContext.condition.allOf.metricValue\n$threshold = $Request.Body.data.alertContext.condition.allOf.operator\n$alertCondition = $Request.Body.data.essentials.monitorCondition\nif ((!$metricDTU) -or (!$threshold) -or (!$alertCondition)){\n    Send-Answer -Answer \"ASDAS - Wrong request - No Action\" -WriteHost $true\n    exit 1\n}\n\n# Checking Database current status\n$database = Get-AzSqlDatabase -ResourceGroupName $resourceGroupName -ServerName $serverName -databaseName $DatabaseName\nif(!$database){\n    Send-Answer -Answer \"ASDAS - Database, Server or Resource Group does not exist - No Action\" - Write-Host $true\n    exit 1\n}\nelse {\n    $currentSku = $databaseName.currentServiceObjectiveName\n    $scalingSku = $database.RequestedServiceObjectiveName\n    $indexSku = [array]::indexof($sqlSkus,$currentSku)\n    $indexMaxSku = [array]::indexof($sqlSkus,$maxsku)\n    $indexMinSku = [array]::indexof($sqlSkus,$minsku)\n    Write-Host \"ASDAS - DB: $DatabaseName - CurrentTier: $currentSku - ScalingTier: $scalingSku - DTU: $metricDTU - Operator: $threshold - Alert Condition: $alertCondition\"\n}\n\n# Checking if the DB is already in scaling or the alert is resolved.\nif (($currentSku -ne $scalingSku) -or ($alertCondition -ne \"Fired\")) {\n    Send-Answer -answer \"ASDAS - DB: $DatabaseName - Scaling Already in progress or Alert Resolved - Current SKU: $currentSku\" -WriteHost $true\n    exit 0\n}\n\n# Scale Actions\ntry {\n    \n    #Scale UP Action.\n    if ($threshold -eq \"GreaterThanOrEqual\") {\n        if($indexSku -lt $indexMaxSku) {\n            $targetsku = $sqlSkus[$indexSku+1]\n            # Scale SQL Database UP.\n            Set-AzSqlDatabase -ResourceGroupName $resourceGroupName -ServerName $serverName -DatabaseName $databaseName -RequestedServiceObjectiveName $targetsku\n            $body = \"ASDAS - DB: $DatabaseName - Action required: Scale UP - Previous SKU: $currentSku, New SKU: $targetsku - DTU: $metricDTU\"\n            Write-Host $body\n        }\n        else {\n            # Maximum SQL SKU reached.\n            $body = \"ASDAS - DB: $DatabaseName - Action required: Scale UP - Maximum SKU reached - DTU: $metricDTU\"\n            Write-Host $body\n        }\n    }\n\n    # Scale DOWN Action.\n    if ($threshold -eq \"LessThanOrEqual\") {\n        if($indexSku -gt $indexMinSku) {\n            $targetsku = $sqlSkus[$indexSku-1]\n            # Scale SQL Database DOWN.\n            Set-AzSqlDatabase -ResourceGroupName $resourceGroupName -ServerName $serverName -databaseName $DatabaseName -RequestedServiceObjectiveName $targetsku\n            $body = \"ASDAS - DB: $DatabaseName - Action required: Scale DOWN - Previous SKU: $currentSku, New SKU: $targetsku - DTU: $metricDTU\"\n            Write-Host $body\n        }\n        else {\n            # Minimum SKU reached.\n            $body = \"ASDAS - DB: $DatabaseName - Action required: Scale DOWN - Minimum SKU reached - DTU: $metricDTU\"\n            Write-Host $body\n        }\n    }\n}\ncatch {\n    Send-Answer -Answer \"ASDAS - DB: $DatabaseName - Error Scaling the DB - please refer to the Function App log for additional information\" -WriteHost $true\n    exit 1\n}\n\n# Send Response.\nSend-Answer -Answer $body -WriteHost $false\n",
+                    "function.json": "{\n  \"bindings\": [\n    {\n      \"authLevel\": \"function\",\n      \"type\": \"httpTrigger\",\n      \"direction\": \"in\",\n      \"name\": \"Request\",\n      \"methods\": [\n        \"get\",\n        \"post\"\n      ]\n    },\n    {\n      \"type\": \"http\",\n      \"direction\": \"out\",\n      \"name\": \"Response\"\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        {   // Resource: Application Insight for Function App
+            "name": "[variables('appInsightsServiceName')]",
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "ApplicationId": "[variables('appInsightsServiceName')]"
+            }
+        },
+        {   // Resource: SQL Server and SQL DB
+            "name": "[parameters('sqlServerName')]",
+            "type": "Microsoft.Sql/servers",
+            "apiVersion": "2020-02-02-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "administratorLogin": "[parameters('sqlAdministratorLogin')]",
+                "administratorLoginPassword": "[parameters('sqlAdministratorLoginPassword')]"
+            },
+            "resources": [
+                {
+                    "name": "[parameters('sqlDBName')]",
+                    "type": "databases",
+                    "apiVersion": "2020-02-02-preview",
+                    "location": "[resourceGroup().location]",
+                    "tags": {
+                        "ASDAS": "Enabled"
+                    },
+                    "dependsOn": [
+                        "[parameters('sqlServerName')]"
+                    ],
+                    "properties": {
+                        "collation": "[variables('databaseCollation')]"
+                    },
+                    "sku": {
+                        "name": "[variables('deploySkuTier')]",
+                        "tier": "[variables('skuTierFamily')]"
+                    },
+                    "resources": [
+                        {
+                            "comments": "Transparent Data Encryption",
+                            "name": "current",
+                            "type": "transparentDataEncryption",
+                            "apiVersion": "2017-03-01-preview",
+                            "dependsOn": [
+                                "[parameters('sqlDBName')]"
+                            ],
+                            "properties": {
+                                "status": "[variables('transparentDataEncryption')]"
+                            }
+                        }  
+                    ]
+                },
+                {
+                    "name": "AllowAllMicrosoftAzureIps",
+                    "type": "firewallrules",
+                    "apiVersion": "2020-02-02-preview",
+                    "location": "[resourceGroup().location]",
+                    "properties": {
+                        "endIpAddress": "0.0.0.0",
+                        "startIpAddress": "0.0.0.0"
+                    },
+                    "dependsOn": [
+                        "[parameters('sqlServerName')]"
+                    ]
+                }
+            ]
+        },
+
+        {   //Resource: Role Assignement for Azure Function - SQL Server Contributor - 6d8ee4ec-f05a-4a1d-8b00-a9b17e38b437
+            "name": "[variables('roleAssignementName')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2020-04-01-preview",
+            "properties": {
+                "roleDefinitionId": "[variables('sqlDBContributorRole')]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionName')),'2018-11-01', 'full').identity.principalId]",
+                "scope": "[resourceGroup().id]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionName'))]"
+            ]
+        }
+    ],
     "outputs": {}
 }

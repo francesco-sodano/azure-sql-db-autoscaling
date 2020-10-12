@@ -1,0 +1,9 @@
+{
+    "$schema": "https://aka.ms/azure-quickstart-templates-metadata-schema#",
+    "type": "QuickStart",
+    "itemDisplayName": "Provision a SQL Database with Auto scaling function",
+    "description": "This ARM Template deploys an Azure SQL Database with DTU Consumption plan (with a new Azure SQL Server) including all the resources required to perform Auto Scaling (scale up and scale down) based on Metric Alerts using a function app.",
+    "summary": "Azure SQL Database with DTU Consumption plan (with a new Azure SQL Server) including all the resources required to perform Auto Scaling.",
+    "githubUsername": "francesco-sodano",
+    "dateUpdated": "2020-10-09"
+  }
