@@ -69,6 +69,7 @@
         "hostingPlanName": "ASDASHostingPlan",
         "functionAppName": "asdas-scaling",
         "functionName": "[concat('asdas-',parameters('sqlServerName'), '-',parameters('sqlDBName'))]",
+        "functionAppURL": "[concat('https://', variables('functionName'),'.azurewebsites.net/api/', variables('functionAppName'),'?code=')]",
         "appInsightsServiceName": "[concat('appi-', parameters('sqlServerName'))]",
         "metricDescriptionUp": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for UPSCALING ', parameters('sqlDBName'))]",
         "metricDescriptionDown": "[concat('Azure SQL DB Auto Scaling (ASDAS) metric alert for DOWNSCALING ', parameters('sqlDBName'))]",
@@ -100,10 +101,9 @@
                         "name": "[variables('functionAppName')]",
                         "functionAppResourceId": "[resourceId('Microsoft.Web/sites', variables('functionName'))]",
                         "functionName": "[variables('functionAppName')]",
-                        "httpTriggerUrl": "string",
+                        "httpTriggerUrl": "[concat(variables('functionAppURL'), listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').default)]",
                         "useCommonAlertSchema": true
                         // "[listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').default]"
-                        // "[listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').trigger_url]"
                     }
                 ]
             }
