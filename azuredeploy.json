@@ -102,7 +102,7 @@
                         "functionName": "[variables('functionAppName')]",
                         "httpTriggerUrl": "string",
                         "useCommonAlertSchema": true
-                        // "[listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').functionKeys.default]"
+                        // "[listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').default]"
                         // "[listKeys(resourceId('Microsoft.Web/sites/functions', variables('functionName'), variables('functionAppName')),'2018-11-01').trigger_url]"
                     }
                 ]
