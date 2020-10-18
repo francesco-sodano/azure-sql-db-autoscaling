@@ -77,7 +77,7 @@
         "alertnamedown": "[concat(parameters('sqlDBName'),' - downscaling alert')]",
         "databaseCollation": "SQL_Latin1_General_CP1_CI_AS",
         "transparentDataEncryption": "Enabled",
-        "roleAssignementName": "[guid(uniqueString(parameters('sqlServerName')))]",
+        "roleAssignementName": "[guid(parameters('sqlServerName'))]",
         "sqlDBContributorRole": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '9b7fa17d-e63e-47b0-bb0a-15c516ac86ec')]",
         "deploySkuTier": "[parameters('startingSkuTier')[0]]",
         "minimumSkuTier": "[parameters('startingSkuTier')[1]]",
