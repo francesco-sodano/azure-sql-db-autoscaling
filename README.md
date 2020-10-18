@@ -124,7 +124,7 @@ ASDAS includes a set parameters already pre-defined **to reduce at the minimum t
 
 You can deploy directly in your Azure Subscriptino using the button below.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffrancesco-sodano%2Fazure-sql-db-autoscaling%2Fvnext%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffrancesco-sodano%2Fazure-sql-db-autoscaling%2Fmaster%2Fazuredeploy.json)
 
 Or you can run the Azure CLI script provided in the scripts fodler of the project.
 
