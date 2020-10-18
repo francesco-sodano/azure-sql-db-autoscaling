@@ -5,7 +5,6 @@
 ## Introduction
 
 This ARM Template deploys an Azure SQL Database with DTU Consumption plan (with a new Azure SQL Server) including all the resources required to perform Auto Scaling (scale up and scale down) based on Metric Alerts using a function app. Please refer to *ASDAS Architecture* for complete resource list.
-
 The scope of this project is to give the possibility to scale automatically the Azure SQL Database on DTU consumption usage to reduce costs of the data layer when database is under-utilized.
 
 It's planned to be used in the following cases: 
