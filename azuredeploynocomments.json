@@ -390,19 +390,6 @@
                     ]
                 }
             ]
-        },
-        {
-            "name": "[variables('roleAssignementName')]",
-            "type": "Microsoft.Authorization/roleAssignments",
-            "apiVersion": "2020-04-01-preview",
-            "properties": {
-                "roleDefinitionId": "[variables('sqlDBContributorRole')]",
-                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionName')),'2018-11-01', 'full').identity.principalId]",
-                "scope": "[resourceGroup().id]"
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', variables('functionName'))]"
-            ]
         }
     ],
     "outputs": {}
